@@ -2,7 +2,7 @@ import os
 import random
 import tweepy
 from gradio_client import Client
-from google import genai
+import google.generativeai as genai
 import requests
 
 # ==== API Keys ====
@@ -51,12 +51,12 @@ except Exception as e:
 
 # ==== Geminiでハッシュタグ生成 ====
 try:
-    client = genai.Client(api_key=GEMINI_API_KEY)
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+
     prompt = f"単語『{word}』を含む創作的な日本語ツイート文とハッシュタグ3つを生成してください。"
-    response = client.models.generate_content(
-        model="models/gemini-2.5-flash",
-        contents=[prompt]
-    )
+    response = model.generate_content(prompt)
+
     tweet_text = response.text.strip()
 except Exception as e:
     print(f"❌ ハッシュタグ生成エラー: {e}")
