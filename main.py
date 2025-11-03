@@ -33,34 +33,42 @@ def generate_word():
 
 # ===== 画像生成 (gradio_client 経由) =====
 def generate_image(word):
-    prompt = f"『{word}』という日本語の単語から連想されるバズるイラストまたは写真"
     try:
-        client = Client(HF_SPACE_ID)
-        result = client.predict(prompt, api_name="/predict")  # Space によって api_name が異なる場合あり
-        # result は dict か list 形式 depending on Space
-        if isinstance(result, dict) and "data" in result:
-            image_data = result["data"][0]
-        else:
-            image_data = result[0]  # 適宜調整
-        return image_data  # URL か base64 など Space による
+        client = Client("https://robotsan-x-bot-image.hf.space/")
+        result = client.predict(word, api_name="/predict")
+
+        # 返却値チェック
+        if not result or not isinstance(result, list) or not result[0]:
+            raise ValueError("画像生成APIの応答が不正です")
+
+        image_base64 = result[0]
+
+        # base64文字列が正しいか確認
+        if len(image_base64) % 4 != 0:
+            print("⚠️ base64文字列の長さが不正のため修正を試みます")
+            image_base64 += "=" * (4 - len(image_base64) % 4)
+
+        image_data = base64.b64decode(image_base64)
+        image_path = "output.png"
+        with open(image_path, "wb") as f:
+            f.write(image_data)
+        print("🖼️ 画像生成成功")
+        return image_path
+
     except Exception as e:
-        print(f"❌ 画像生成エラー: {e}")
+        print("❌ 画像生成エラー:", e)
         return None
 
 # ===== ハッシュタグ生成 =====
 def generate_hashtags(word):
     prompt = f"「{word}」に関連するユーモラスで自然な日本語ハッシュタグを10個生成してください。#をつけて改行で区切ってください。"
     try:
-        response = genai.chat(
-            model=text_model,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        hashtags_text = response.last.message["content"]
-        hashtags = [tag.strip() for tag in hashtags_text.split("\n") if tag.strip()]
-        return hashtags[:10]
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        return response.text.strip()
     except Exception as e:
-        print(f"❌ ハッシュタグ生成エラー: {e}")
-        return []
+        print("❌ ハッシュタグ生成エラー:", e)
+        return ""
 
 # ===== Twitter 投稿 =====
 def post_to_twitter(word, image_data):
@@ -101,6 +109,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
