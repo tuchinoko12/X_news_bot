@@ -1,5 +1,7 @@
 tweepy
-python-dotenv
-requests
+google-generativeai
+gradio_client
 Pillow
-google-genai
+requests
+python-dotenv
+
