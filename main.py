@@ -11,7 +11,7 @@ MODEL_INPUT_KEY = "prompt"
 
 # ===== Gemini text_model 初期化 =====
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-client_gemini = genai.Client(api_key=GEMINI_API_KEY)
+genai.configure(api_key=GEMINI_API_KEY)
 text_model = "gemini-2.0-flash"
 
 # ===== Twitter 認証 =====
@@ -51,11 +51,11 @@ def generate_image(word):
 def generate_hashtags(word):
     prompt = f"「{word}」に関連するユーモラスで自然な日本語ハッシュタグを10個生成してください。#をつけて改行で区切ってください。"
     try:
-        response = client_gemini.models.generate_content(
+        response = genai.chat(
             model=text_model,
-            contents=[prompt],
+            messages=[{"role": "user", "content": prompt}],
         )
-        hashtags_text = response.candidates[0].content[0].text
+        hashtags_text = response.last.message["content"]
         hashtags = [tag.strip() for tag in hashtags_text.split("\n") if tag.strip()]
         return hashtags[:10]
     except Exception as e:
@@ -101,4 +101,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
