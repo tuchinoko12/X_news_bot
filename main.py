@@ -2,115 +2,88 @@ import os
 import random
 import base64
 import requests
-from io import BytesIO
-from PIL import Image
 from gradio_client import Client
 import google.generativeai as genai
+import tweepy
 
-# ===== 環境変数 =====
+# === 設定 ===
+# 環境変数（GitHub Secretsから読み込まれる）
 API_KEY = os.getenv("API_KEY_1")
 API_SECRET = os.getenv("API_SECRET_1")
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN_1")
 ACCESS_SECRET = os.getenv("ACCESS_SECRET_1")
-BEARER_TOKEN = os.getenv("BEARER_TOKEN_1")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-HF_SPACE_ID = os.getenv("HF_SPACE_ID")  # 例: robotsan/X_bot_image
+HF_SPACE_ID = os.getenv("HF_SPACE_ID")
 
-# ===== Gemini 初期化 =====
+# === Gemini設定 ===
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(model_name="models/gemini-1.5-flash", api_version="v1")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
-# ===== ひらがな3文字生成 =====
-def generate_word():
-    hira = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"
-    return "".join(random.choice(hira) for _ in range(3))
+# === ランダム単語生成 ===
+def generate_random_word():
+    hiragana = "あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん"
+    return ''.join(random.choices(hiragana, k=random.randint(3, 5)))
 
-# ===== 画像生成 =====
-def generate_image(word):
-    print("🎨 画像生成中...")
-    prompt = f"『{word}』という日本語の単語から連想されるユーモラスでバズりそうなイラストや写真"
-
+# === Hugging Faceで画像生成 ===
+def generate_image(prompt):
     try:
-        client = Client(HF_SPACE_ID)
+        print("🎨 画像生成中...")
+        client = Client(f"https://{HF_SPACE_ID}.hf.space/")
         result = client.predict(prompt, api_name="/predict")
 
-        # Spaceが返すのが画像パス or base64 のどちらでも対応
-        if isinstance(result, str) and result.endswith((".png", ".jpg", ".jpeg", ".webp")):
-            image_url = result
-            response = requests.get(image_url)
-            image = Image.open(BytesIO(response.content))
-        elif isinstance(result, list) and len(result) > 0:
-            data = result[0]
-            if data.startswith("data:image"):
-                image_data = base64.b64decode(data.split(",")[1])
-                image = Image.open(BytesIO(image_data))
-            else:
-                response = requests.get(data)
-                image = Image.open(BytesIO(response.content))
-        else:
-            raise ValueError(f"画像生成APIの応答が不正です: {result}")
+        if isinstance(result, list) and len(result) > 0 and isinstance(result[0], str):
+            image_path = result[0]
+            if image_path.startswith("/tmp"):
+                raise ValueError(f"画像生成APIの応答が不正です: {image_path}")
 
-        file_name = f"{word}.png"
-        image.save(file_name)
-        return file_name
+            image_url = f"https://{HF_SPACE_ID}.hf.space/file={image_path}"
+            response = requests.get(image_url)
+            if response.status_code == 200:
+                filename = "output.png"
+                with open(filename, "wb") as f:
+                    f.write(response.content)
+                return filename
+            else:
+                raise ValueError(f"画像取得失敗: {response.status_code}")
+        else:
+            raise ValueError("画像生成APIの応答が不正です")
     except Exception as e:
         print(f"❌ 画像生成エラー: {e}")
         return None
 
-# ===== ハッシュタグ生成 =====
+# === Geminiでハッシュタグ生成 ===
 def generate_hashtags(word):
-    prompt = f"「{word}」に関連する日本語のユーモラスで自然なハッシュタグを10個生成してください。#をつけて改行で区切ってください。"
     try:
+        prompt = f"次の単語に合う日本語のハッシュタグを3つ生成してください。単語: {word}"
         response = model.generate_content(prompt)
-        hashtags_text = response.text.strip()
-        hashtags = [tag.strip() for tag in hashtags_text.split("\n") if tag.strip()]
-        return hashtags[:10]
+        return response.text.strip()
     except Exception as e:
         print(f"❌ ハッシュタグ生成エラー: {e}")
-        return []
+        return ""
 
-# ===== X（Twitter）に投稿 =====
-def post_to_twitter(word, image_path):
-    hashtags = generate_hashtags(word)
-    tweet_text = f"生成単語: {word}\n" + " ".join(hashtags)
-
+# === X（Twitter）に投稿 ===
+def post_to_twitter(text, image_path):
     try:
-        # まずメディアをアップロード（旧v1.1 APIは無料で利用可能）
-        media_id = None
-        if image_path:
-            upload_url = "https://upload.twitter.com/1.1/media/upload.json"
-            files = {"media": open(image_path, "rb")}
-            headers = {"Authorization": f"Bearer {BEARER_TOKEN}"}
-            upload_resp = requests.post(upload_url, headers=headers, files=files)
-            if upload_resp.status_code == 200:
-                media_id = upload_resp.json().get("media_id_string")
-            else:
-                print(f"❌ メディアアップロード失敗: {upload_resp.text}")
+        auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_SECRET)
+        api = tweepy.API(auth)
 
-        # 投稿（v2対応）
-        post_url = "https://api.x.com/2/tweets"
-        headers = {
-            "Authorization": f"Bearer {BEARER_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        payload = {"text": tweet_text}
-        if media_id:
-            payload["media"] = {"media_ids": [media_id]}
-
-        post_resp = requests.post(post_url, headers=headers, json=payload)
-        if post_resp.status_code in (200, 201):
-            print(f"✅ 投稿完了: {tweet_text}")
+        if image_path and os.path.exists(image_path):
+            media = api.media_upload(image_path)
+            api.update_status(status=text, media_ids=[media.media_id])
         else:
-            print(f"❌ 投稿エラー: {post_resp.status_code} - {post_resp.text}")
+            api.update_status(status=text)
+
+        print("✅ 投稿完了！")
     except Exception as e:
         print(f"❌ 投稿エラー: {e}")
 
-# ===== メイン =====
-def main():
-    word = generate_word()
-    print(f"🎲 生成単語: {word}")
-    image_path = generate_image(word)
-    post_to_twitter(word, image_path)
-
+# === メイン処理 ===
 if __name__ == "__main__":
-    main()
+    word = generate_random_word()
+    print(f"🎲 生成単語: {word}")
+
+    image_path = generate_image(word)
+    hashtags = generate_hashtags(word)
+    tweet_text = f"{word}\n{hashtags}"
+
+    post_to_twitter(tweet_text, image_path)
