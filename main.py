@@ -67,7 +67,7 @@ import os
 
 def post_to_twitter(text, image_path=None):
     try:
-        BEARER_TOKEN = os.getenv("BEARER_TOKEN")  # XのBearerトークンを新しく.envに追加
+        BEARER_TOKEN = os.getenv("BEARER_TOKEN_1")  # XのBearerトークンを新しく.envに追加
 
         # まず画像をアップロードできるようにする（Freeではmedia不可のため、画像なしツイート推奨）
         if image_path and os.path.exists(image_path):
@@ -95,5 +95,6 @@ if __name__ == "__main__":
     tweet_text = f"{word}\n{hashtags}"
 
     post_to_twitter(tweet_text, image_path)
+
 
 
