@@ -28,7 +28,7 @@ def generate_random_word():
 def generate_image(prompt):
     try:
         print("🎨 画像生成中...")
-        client = Client(f"https://{HF_SPACE_ID}.hf.space/")
+        client = client = Client(HF_SPACE_ID)
         result = client.predict(prompt, api_name="/predict")
 
         if isinstance(result, list) and len(result) > 0 and isinstance(result[0], str):
@@ -62,18 +62,26 @@ def generate_hashtags(word):
         return ""
 
 # === X（Twitter）に投稿 ===
-def post_to_twitter(text, image_path):
+import requests
+import os
+
+def post_to_twitter(text, image_path=None):
     try:
-        auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET, ACCESS_TOKEN, ACCESS_SECRET)
-        api = tweepy.API(auth)
+        BEARER_TOKEN = os.getenv("BEARER_TOKEN")  # XのBearerトークンを新しく.envに追加
 
+        # まず画像をアップロードできるようにする（Freeではmedia不可のため、画像なしツイート推奨）
         if image_path and os.path.exists(image_path):
-            media = api.media_upload(image_path)
-            api.update_status(status=text, media_ids=[media.media_id])
-        else:
-            api.update_status(status=text)
+            print("⚠️ Freeプランでは画像付き投稿は非対応の可能性があります。")
+        
+        url = "https://api.x.com/2/tweets"
+        headers = {"Authorization": f"Bearer {BEARER_TOKEN}"}
+        payload = {"text": text}
 
-        print("✅ 投稿完了！")
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code == 201:
+            print("✅ 投稿完了！")
+        else:
+            print(f"❌ 投稿エラー: {response.status_code} - {response.text}")
     except Exception as e:
         print(f"❌ 投稿エラー: {e}")
 
@@ -87,4 +95,5 @@ if __name__ == "__main__":
     tweet_text = f"{word}\n{hashtags}"
 
     post_to_twitter(tweet_text, image_path)
+
 
