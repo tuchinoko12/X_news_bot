@@ -2,7 +2,10 @@ name: Daily News Bot
 
 on:
   schedule:
-    - cron: "0 22 * * *"  # 日本時間7:00（UTC+9）
+    # 1日3回 (日本時間 7:00, 15:00, 23:00) に実行
+    - cron: "0 22 * * *"  # JST 7:00 (UTC 22:00)
+    - cron: "0 6 * * *"   # JST 15:00 (UTC 6:00)
+    - cron: "0 14 * * *"  # JST 23:00 (UTC 14:00)
   workflow_dispatch:
 
 jobs:
@@ -19,5 +22,6 @@ jobs:
       - name: Run News Bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          LINE_ACCESS_TOKEN: ${{ secrets.LINE_ACCESS_TOKEN }}
+          LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
         run: python news_bot.py
